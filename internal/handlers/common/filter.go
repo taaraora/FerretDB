@@ -251,6 +251,13 @@ func filterFieldExpr(fieldValue any, expr *types.Document) (bool, error) {
 				return false, err
 			}
 
+		case "$elemMatch":
+			// {field: { $elemMatch: { $gte: 80, $lt: 85 } } }
+			res, err := filterFieldExprElemMatch(fieldValue, exprValue)
+			if !res || err != nil {
+				return false, err
+			}
+
 		case "$bitsAllClear":
 			// {field: {$bitsAllClear: value}}
 			res, err := filterFieldExprBitsAllClear(fieldValue, exprValue)
@@ -319,6 +326,60 @@ func filterFieldExprSize(fieldValue any, sizeValue any) (bool, error) {
 	if !ok {
 		return false, nil
 	}
+
+	size, err := GetWholeNumberParam(sizeValue)
+	if err != nil {
+		switch err {
+		case errUnexpectedType:
+			return false, NewErrorMsg(ErrBadValue, "$size needs a number")
+		case errNotWholeNumber:
+			return false, NewErrorMsg(ErrBadValue, "$size must be a whole number")
+		default:
+			return false, err
+		}
+	}
+
+	if size < 0 {
+		return false, NewErrorMsg(ErrBadValue, "$size may not be negative")
+	}
+
+	if arr.Len() != int(size) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// filterFieldExprElemMatch handles { <field>: { $elemMatch: { <query1>, <query2>, ... } } } filter.
+func filterFieldExprElemMatch(fieldValue any, elemMatchValue any) (bool, error) {
+	arr, ok := fieldValue.(*types.Array)
+	if !ok {
+		return false, nil
+	}
+
+	queryCriteria, ok := elemMatchValue.(*types.Document)
+
+	var criteria []*types.Document
+
+	for _, key := range queryCriteria.Keys() {
+		v, err := queryCriteria.Get(key)
+		if err != nil {
+			return false, fmt.Errorf("cannot get filter criterion for $elemMatch operator")
+		}
+
+		criterion, err := types.NewDocument(key, v)
+		if err != nil {
+			return false, fmt.Errorf("cannot create filter criterion for k: %s, v: %v", key, v)
+		}
+
+		criteria = append(criteria, criterion)
+	}
+
+	for k, v := range arr {
+		
+	}
+
+	filterFieldExpr(fieldValue, criterion)
 
 	size, err := GetWholeNumberParam(sizeValue)
 	if err != nil {
